@@ -1,3 +1,5 @@
+///////// jpeg decorder //////////////////
+
 #include <fstream>
 #include <iterator>
 #include <algorithm>
@@ -79,3 +81,122 @@ int main_crypt() {
     }
     return 0;
 }
+// in/64.jpeg -> a -> b -> out/64.jpeg
+
+enum market_t {
+  M_SOF0 = 0xc0, M_SOF1 = 0xc1, M_SOF2 = 0xc2, M_SOF3 = 0xc3,
+  M_SOF5 = 0xc5, M_SOF6 = 0xc6, M_SOF7 = 0xc7, 
+  M_JPG = 0xc8, M_SOF9 = 0xc9, M_SOF10 = 0xca, M_SOF11 = 0xcb, 
+  M_SOF13 = 0xcd, M_SOF14 = 0xce, M_SOF15 = 0xcf,
+
+  M_DHT = 0xc4, M_DAC = 0xcc,
+
+  M_RST0 = 0xd0, M_RST1 = 0xd1, M_RST2 = 0xd2, M_RST3 = 0xd3, 
+  M_RST4 = 0xd4, M_RST5 = 0xd5, M_RST6 = 0xd6, M_RST7 = 0xd7,
+
+  M_SOI = 0xd8, M_EOI = 0xd9, M_SOS = 0xda,
+  M_DQT = 0xdb, 
+  M_DNL = 0xdc, M_DRI = 0xdd, M_DHP = 0xde, M_EXP = 0xdf,
+
+  M_APP0 = 0xe0, M_APP1 = 0xe1, M_APP2 = 0xe2, M_APP3 = 0xe3,
+  M_APP4 = 0xe4, M_APP5 = 0xe5, M_APP6 = 0xe6, M_APP7 = 0xe7,
+  M_APP8 = 0xe8, M_APP9 = 0xe9, M_APP10 = 0xea, M_APP11 = 0xeb,
+  M_APP12 = 0xec, M_APP13 = 0xed, M_APP14 = 0xee, M_APP15 = 0xef,
+
+  M_JPG0 = 0xf0, M_JPG13 = 0xfd, 
+  
+  M_COM = 0xfe, 
+
+  M_TEM = 0x01,
+};    
+
+int main____() {
+    cout << boolalpha; 
+    ifstream input("out/64.jpeg", ios::binary);
+    if (input.good()) {
+        //cout << "file opened" << endl;
+        
+        input.seekg(0, ios::end);
+        int n = input.tellg();
+        //cout << "file size: " << n << " bytes " << endl;
+        input.seekg(0, ios::beg);
+        
+        uint8_t* a = (uint8_t*)malloc(n);
+        // unsigned int 8-bit, 0..255
+        input.read((char*)a, n); 
+
+        // markers without length
+        uint8_t simple_markers[] = {
+            M_SOI, M_EOI, 
+            M_RST0, M_RST1, M_RST2, M_RST3, 
+            M_RST4, M_RST5, M_RST6, M_RST7,
+            M_TEM
+        };
+        const int num_simple_markers = 11;
+        
+        int i = 0;
+        int com_pos = -1;
+        int com_len;
+        
+        while (i < n) {
+            if (a[i] == 255) {
+                int m = a[i + 1];
+                bool simple_marker = false;
+                for (int j = 0; j < num_simple_markers; j++) {
+                    if (m == simple_markers[j]) {
+                        //cout << "simple segment " << (int)m << endl;
+                        i = i + 2;
+                        simple_marker = true;
+                        break;
+                    } 
+                } 
+                if (!simple_marker) {
+                    //cout << "segment with data " << (int)m << " ";
+                    i = i + 2;
+                    //cout << "a[i] " << (int)a[i] << " a[i + 1] " << (int)a[i + 1] << " ";
+                    int len = a[i] * 256 + a[i + 1];
+                    //cout << "len " << len << endl;
+                    
+                    if (m == M_COM) {
+                        //cout << "M_COM " << i << endl;
+                        com_pos = i + 2;
+                        com_len = len - 2;
+                    }
+                    
+                    i = i + len;
+
+                    if (m == M_SOS) {
+                        // skip image data until next segment
+                        while (i + 1 < n) {
+                            // segment starts with `255`
+                            if (a[i] == 255 && a[i + 1] != 0) {
+                                break;
+                            }
+                            i++;
+                        }
+                    }
+                }
+
+            } else {
+                cout << "message not found" << endl;
+                break;
+            }
+        }
+        //cout << "com_pos " << com_pos << endl;
+        if (com_pos != -1) {
+            cout << "hidden message: " << endl;
+            for (int k = com_pos; k < com_pos + com_len; k++) {
+                cout << a[k];
+            }
+            cout << endl;
+        } else {
+            cout << "message not found" << endl;
+        }
+        input.close();
+    } else {
+        cout << "error: can not open file" << endl;
+    }
+    return 0;
+}
+
+///////////////////////////////////////////
