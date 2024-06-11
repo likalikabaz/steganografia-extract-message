@@ -1,0 +1,81 @@
+#include <fstream>
+#include <iterator>
+#include <algorithm>
+
+int main_crypt() {
+    cout << boolalpha; 
+    ifstream input("in/64.jpeg", ios::binary);
+    if (input.good()) {
+        cout << "file opened" << endl;
+        
+        input.seekg(0, ios::end);
+        int n = input.tellg();
+        cout << "file size: " << n << " bytes " << endl;
+        input.seekg(0, ios::beg);
+        
+        uint8_t* a = (uint8_t*)malloc(n);
+        // unsigned int 8-bit, 0..255
+        input.read((char*)a, n); 
+        //for (int i = 0; i < n; i++) {
+        //    cout << (int)a[i] << " ";
+        //}
+        //cout << (int)a[n - 2] << endl;
+        //cout << (int)a[n - 1] << endl;
+        //cout << endl;
+        // JPEG standrand
+        const uint8_t M_EOI = 0xd9; // 217
+        const uint8_t M_COM = 0xfe; // 254
+        // segment 1  255 216    SOI
+        // ...
+        // segment k  255 217    EOI
+        //
+        // ->
+        //
+        // segment 1      255 216    SOI
+        // ...
+        // segment k      255 254    COM        // marker
+        //                0 message_size + 2    // length
+        //                s e c r e t           // payload
+        // segment k + 1  255 217    EOI        
+        //
+        //inv: message_size <= 255
+        const char* message = "secret";
+        int message_size = strlen(message); // 6
+        int m = n + 2 + 2 + message_size;
+        uint8_t* b = (uint8_t*)malloc(m);
+        for (int i = 0; i < n; i++) {
+            b[i] = a[i];
+        }
+        // 255 217 0 0 0 0 0 0 0 0 0   0 
+        // 255 254 0 8 s e c r e t 255 217
+        //int i = m - 4 - message_size - 2;
+        int i = n - 2;
+        //cout << (int)b[i] << endl;
+        //cout << (int)b[i + 1] << endl;
+        b[i + 1] = M_COM;
+        // segment size
+        b[i + 2] = 0;
+        b[i + 3] = 2 + message_size;
+        // copy data
+        for (int j = 0; j < message_size; j++) {
+            b[i + 4 + j] = message[j];
+        }
+        b[m - 2] = 255;
+        b[m - 1] = M_EOI;
+        //cout << endl;
+        //for (int j = m - 4 - message_size - 2; j < m; j++) {
+        //    cout << (int)b[j] << " ";
+        //}        
+        input.close();
+        ofstream output("out/64.jpeg", ios::out | ios::binary);
+        if (output.good()) {
+            output.write((const char*)b, m);
+            output.close();
+        } else {
+            cout << "error: can not create file" << endl;
+        }
+    } else {
+        cout << "error: can not open file" << endl;
+    }
+    return 0;
+}
